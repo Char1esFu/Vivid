@@ -35,6 +35,9 @@
       "kind": "effect-final-target"
     },
     {
+      "kind": "static-image-publication"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {
