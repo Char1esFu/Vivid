@@ -44,6 +44,9 @@
       "kind": "direct-sound"
     },
     {
+      "kind": "text-row-limit"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {
