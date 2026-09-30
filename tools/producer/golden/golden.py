@@ -12,6 +12,7 @@ Layout
   tools/producer/golden/scenarios/*.json  committed: input vectors (size, steps, events, ...)
   .build/golden/config.json               machine-local: self-check results per wallpaper
   .build/golden/baseline/<id>/<scenario>/ machine-local accepted frames + manifest + history
+  .build/golden/promotions/<promotion>/  machine-local promotion record + previous baseline
   .build/golden/runs/<run-id>/            machine-local candidates, diffs, reports, packets
 
 Commands
@@ -36,6 +37,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -49,6 +51,7 @@ SUBMODULE = REPO_ROOT / "producer/third_party/wallpaper-scene-renderer"
 STATE_ROOT = REPO_ROOT / ".build/golden"
 CONFIG_PATH = STATE_ROOT / "config.json"
 BASELINE_ROOT = STATE_ROOT / "baseline"
+PROMOTIONS_ROOT = STATE_ROOT / "promotions"
 RUNS_ROOT = STATE_ROOT / "runs"
 FIXTURES_DIR = STATE_ROOT / "fixtures"  # generated scenes, never committed
 
@@ -684,12 +687,26 @@ def cmd_promote(args):
             print(f"{wallpaper_id}: candidate has no manifest, skipped")
             continue
         history = load_json(base / "history.json", default=[])
+        PROMOTIONS_ROOT.mkdir(parents=True, exist_ok=True)
+        promotion = Path(tempfile.mkdtemp(prefix=now_id() + "-", dir=PROMOTIONS_ROOT))
+        staged = promotion / "candidate"
+        previous = promotion / "previous"
+        record = {"run": args.run, "reason": args.reason, "date": now_id(),
+                  "renderer": load_json(candidate / "manifest.json").get("renderer"),
+                  "baseline": str(base.relative_to(STATE_ROOT)),
+                  "previous_baseline": str(previous.relative_to(STATE_ROOT)) if base.exists() else None}
+        # Prepare the complete replacement before moving the accepted baseline. Preserve its
+        # entire directory, including pixels, traces, manifests and original history bytes;
+        # a history entry alone cannot reconstruct the evidence behind an earlier acceptance.
+        # Unique promotion directories also preserve repeated promotions of the same run.
+        shutil.copytree(candidate, staged)
+        history.append(record)
+        save_json(staged / "history.json", history)
+        save_json(promotion / "promotion.json", record)
         if base.exists():
-            shutil.rmtree(base)
-        shutil.copytree(candidate, base)
-        history.append({"run": args.run, "reason": args.reason, "date": now_id(),
-                        "renderer": load_json(candidate / "manifest.json").get("renderer")})
-        save_json(base / "history.json", history)
+            base.rename(previous)
+        base.parent.mkdir(parents=True, exist_ok=True)
+        staged.rename(base)
         print(f"{wallpaper_id}/{result['scenario']}: promoted ({args.reason})")
 
 
