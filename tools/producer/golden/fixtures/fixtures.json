@@ -38,6 +38,9 @@
       "kind": "static-image-publication"
     },
     {
+      "kind": "bone-opacity"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {

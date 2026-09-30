@@ -32,6 +32,7 @@ from effect_live_topology import make_fixture as make_effect_live_topology_fixtu
 from copy_extents import make_fixture as make_copy_extents_fixture
 from effect_final_target import make_fixture as make_effect_final_target_fixture
 from static_image_publication import make_fixture as make_static_image_publication_fixture
+from bone_opacity import make_fixture as make_bone_opacity_fixture
 from script_source import make_fixture as make_script_source_fixture
 from camera_path_pose import make_fixture as make_camera_path_pose_fixture
 from general_zoom import make_fixture as make_general_zoom_fixture
@@ -433,6 +434,8 @@ def expand_spec(spec, assets_dir):
             fixtures["effect-final-target"] = make_effect_final_target_fixture()
         if family["kind"] == "static-image-publication":
             fixtures["static-image-publication"] = make_static_image_publication_fixture()
+        if family["kind"] == "bone-opacity":
+            fixtures["bone-opacity"] = make_bone_opacity_fixture(assets_dir)
         if family["kind"] == "effect-live-topology":
             fixtures["effect-live-topology"] = make_effect_live_topology_fixture()
         if family["kind"] == "created-script-properties":
