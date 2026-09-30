@@ -47,6 +47,9 @@
       "kind": "text-row-limit"
     },
     {
+      "kind": "model-morph"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {
