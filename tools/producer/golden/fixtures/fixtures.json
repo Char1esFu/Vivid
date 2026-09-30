@@ -41,6 +41,9 @@
       "kind": "bone-opacity"
     },
     {
+      "kind": "direct-sound"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {

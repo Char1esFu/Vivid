@@ -33,6 +33,7 @@ from copy_extents import make_fixture as make_copy_extents_fixture
 from effect_final_target import make_fixture as make_effect_final_target_fixture
 from static_image_publication import make_fixture as make_static_image_publication_fixture
 from bone_opacity import make_fixture as make_bone_opacity_fixture
+from direct_sound import make_fixture as make_direct_sound_fixture
 from script_source import make_fixture as make_script_source_fixture
 from camera_path_pose import make_fixture as make_camera_path_pose_fixture
 from general_zoom import make_fixture as make_general_zoom_fixture
@@ -369,8 +370,11 @@ class FixtureBuilder:
         for name, content in self.spec.get("files", {}).items():
             target = self.dir / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content if isinstance(content, str)
-                              else json.dumps(content, indent=1, ensure_ascii=False))
+            if isinstance(content, bytes):
+                target.write_bytes(content)
+            else:
+                target.write_text(content if isinstance(content, str)
+                                  else json.dumps(content, indent=1, ensure_ascii=False))
         # Replacement inputs must exist without a layer holding them alive. Declaring those
         # assets separately lets lifetime fixtures distinguish an unreferenced old selection
         # from a texture retained by another visible or hidden material.
@@ -436,6 +440,8 @@ def expand_spec(spec, assets_dir):
             fixtures["static-image-publication"] = make_static_image_publication_fixture()
         if family["kind"] == "bone-opacity":
             fixtures["bone-opacity"] = make_bone_opacity_fixture(assets_dir)
+        if family["kind"] == "direct-sound":
+            fixtures["direct-sound"] = make_direct_sound_fixture()
         if family["kind"] == "effect-live-topology":
             fixtures["effect-live-topology"] = make_effect_live_topology_fixture()
         if family["kind"] == "created-script-properties":
