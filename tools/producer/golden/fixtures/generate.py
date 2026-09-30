@@ -37,6 +37,7 @@ from direct_sound import make_fixture as make_direct_sound_fixture
 from text_row_limit import make_fixture as make_text_row_limit_fixture
 from model_morph import make_fixture as make_model_morph_fixture
 from sprite_autosize import make_fixture as make_sprite_autosize_fixture
+from sprite_clock import make_fixture as make_sprite_clock_fixture
 from script_source import make_fixture as make_script_source_fixture
 from camera_path_pose import make_fixture as make_camera_path_pose_fixture
 from general_zoom import make_fixture as make_general_zoom_fixture
@@ -451,6 +452,8 @@ def expand_spec(spec, assets_dir):
             fixtures["model-morph"] = make_model_morph_fixture(assets_dir)
         if family["kind"] == "sprite-autosize":
             fixtures["sprite-autosize"] = make_sprite_autosize_fixture(assets_dir)
+        if family["kind"] == "sprite-clock":
+            fixtures["sprite-clock"] = make_sprite_clock_fixture(assets_dir)
         if family["kind"] == "effect-live-topology":
             fixtures["effect-live-topology"] = make_effect_live_topology_fixture()
         if family["kind"] == "created-script-properties":

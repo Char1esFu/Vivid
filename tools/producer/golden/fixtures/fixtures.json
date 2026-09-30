@@ -53,6 +53,9 @@
       "kind": "sprite-autosize"
     },
     {
+      "kind": "sprite-clock"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {
