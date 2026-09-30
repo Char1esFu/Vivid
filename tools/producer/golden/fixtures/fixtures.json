@@ -50,6 +50,9 @@
       "kind": "model-morph"
     },
     {
+      "kind": "sprite-autosize"
+    },
+    {
       "kind": "effect-live-topology"
     },
     {
