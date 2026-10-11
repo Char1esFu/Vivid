@@ -43,7 +43,7 @@ flatpak run io.github.ayasa520.Vivid
 ### GNOME Shell consumer
 
 The release ZIP is ready for `gnome-extensions` and supports GNOME Shell 45
-through 50:
+through 51:
 
 ```sh
 gnome-extensions install --force ./vivid-consumer-gnome-1.0.6-x86_64.zip

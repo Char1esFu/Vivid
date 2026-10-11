@@ -41,7 +41,7 @@ flatpak run io.github.ayasa520.Vivid
 ### GNOME Shell consumer
 
 Release 中的 ZIP 可以直接交给 `gnome-extensions` 安装，支持 GNOME Shell 45 至
-50：
+51：
 
 ```sh
 gnome-extensions install --force ./vivid-consumer-gnome-1.0.6-x86_64.zip

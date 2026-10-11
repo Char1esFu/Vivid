@@ -341,12 +341,34 @@ export const LiveWallpaper = GObject.registerClass(
         }
 
         _findHelperWindowActor() {
-            const actors = this._getWindowActorsForCloneLookup();
+            let actors;
+            try {
+                actors = this._getWindowActorsForCloneLookup();
+            } catch (error) {
+                logger.warn(`helper actor scan failed monitor=${this._monitorIndex}: ${error}`);
+                return null;
+            }
+
             const helperActors = actors.filter(actor =>
                 actor.meta_window?.title?.startsWith(TITLE_PREFIX)
             );
-            if (helperActors.length === 0)
+            if (helperActors.length === 0) {
+                if (this._attachAttempts <= 5 || this._attachAttempts % 10 === 0) {
+                    const actorSummary = actors.map(actor => {
+                        const window = actor?.meta_window;
+                        const title = window?.title ?? '(untitled)';
+                        const wmClass = window?.get_wm_class?.() ?? '(no-wm-class)';
+                        const monitor = Number(window?.get_monitor?.() ?? -1);
+                        const minimized = !!window?.minimized;
+                        const mapped = !!window?.mapped;
+                        return `${wmClass}:${title.slice(0, 80)}@${monitor}` +
+                            `[min=${minimized},mapped=${mapped},visible=${!!actor?.visible}]`;
+                    }).join('; ');
+                    logger.warn(`helper actor scan found no titled source monitor=${this._monitorIndex} ` +
+                        `actors=${actors.length} details=${actorSummary || '(none)'}`);
+                }
                 return null;
+            }
 
             /*
              * Sanity-gate on every existing helper before trusting any of
@@ -362,7 +384,9 @@ export const LiveWallpaper = GObject.registerClass(
             );
             if (titleIndices.some(index => index < 0) ||
                 new Set(titleIndices).size !== titleIndices.length) {
-                logger.debug(`helper title indices are not valid/unique (${titleIndices.join(',')}), rejecting`);
+                logger.warn(`helper title indices are not valid/unique ` +
+                    `monitor=${this._monitorIndex} indices=${titleIndices.join(',')} ` +
+                    `titles=${helperActors.map(actor => actor.meta_window?.title ?? '(untitled)').join(' || ')}`);
                 return null;
             }
 
@@ -371,17 +395,22 @@ export const LiveWallpaper = GObject.registerClass(
             );
             if (metaIndices.some(index => index < 0) ||
                 new Set(metaIndices).size !== metaIndices.length) {
-                logger.debug(`helper meta monitors are not valid/unique (${metaIndices.join(',')}), rejecting`);
+                logger.warn(`helper meta monitors are not valid/unique ` +
+                    `monitor=${this._monitorIndex} indices=${metaIndices.join(',')} ` +
+                    `titles=${helperActors.map(actor => actor.meta_window?.title ?? '(untitled)').join(' || ')}`);
                 return null;
             }
 
             const position = titleIndices.indexOf(this._monitorIndex);
-            if (position < 0)
+            if (position < 0) {
+                logger.warn(`helper title monitor is absent ` +
+                    `monitor=${this._monitorIndex} indices=${titleIndices.join(',')}`);
                 return null;
+            }
 
             const candidate = helperActors[position];
             if (metaIndices[position] !== this._monitorIndex) {
-                logger.debug(`helper title index ${this._monitorIndex} sits on meta monitor ` +
+                logger.warn(`helper title index ${this._monitorIndex} sits on meta monitor ` +
                     `${metaIndices[position]}, waiting for it to be pinned`);
                 return null;
             }
