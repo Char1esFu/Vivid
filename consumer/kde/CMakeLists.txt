@@ -194,6 +194,17 @@ install(
     DESTINATION "${VIVID_KDE_PACKAGE_ID}/contents/ui/VividDisplayEmbed"
     COMPONENT kde_consumer
     EXCLUDE_FROM_ALL
+    PATTERN "*.so" EXCLUDE
+)
+
+# Install the library as a target so CMake removes its build-tree RPATH. Copying
+# it with the QML data directory would retain paths to the release SDK and KScreen
+# build prefix, even though the package uses the desktop's runtime libraries.
+install(
+    TARGETS vivid-display-qml
+    LIBRARY DESTINATION "${VIVID_KDE_PACKAGE_ID}/contents/ui/VividDisplayEmbed"
+    COMPONENT kde_consumer
+    EXCLUDE_FROM_ALL
 )
 
 set(CPACK_GENERATOR "ZIP")

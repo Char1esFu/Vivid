@@ -41,3 +41,16 @@ To override the package version:
 ```sh
 VIVID_CONSUMER_PACKAGE_VERSION=1.2.3 tools/vivid.sh kde zip
 ```
+
+Release CI runs the same `tools/vivid.sh kde zip` command in Ubuntu 24.04 on
+native x86_64 and aarch64 runners. It first downloads the complete Qt 6.8.3 SDK
+and builds KScreen 6.3.6 with that SDK under `.build`. These build dependencies are
+not bundled into the wallpaper package; the desktop supplies Qt and KScreen at runtime.
+Prebuilt packages target Qt 6.8 or newer and libKF6Screen.so.8. CI also rejects
+symbol requirements newer than Ubuntu 24.04's glibc 2.39 and GCC 13 C++ runtime
+(GLIBCXX_3.4.32). Local builds continue to use the dependencies installed on the
+build machine.
+
+After packaging, CI checks the ZIP's library paths, symbol versions and plugin
+dependencies before uploading it. These build checks do not exercise wallpaper
+rendering inside a Plasma session.

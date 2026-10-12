@@ -159,6 +159,7 @@ jobs:
     name: KDE consumer (${{ matrix.arch }})
     needs: metadata
     runs-on: ${{ matrix.runner }}
+    # Keep the libc baseline independent of the Qt SDK used for the plugin.
     container: ubuntu:24.04
     strategy:
       fail-fast: false
@@ -166,43 +167,89 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-24.04
+            qt_host: linux
+            qt_arch: linux_gcc_64
           - arch: aarch64
             runner: ubuntu-24.04-arm
+            qt_host: linux_arm64
+            qt_arch: linux_gcc_arm64
     env:
       DEBIAN_FRONTEND: noninteractive
+      QT_VERSION: 6.8.3
+      KDE_DEPS_PREFIX: ${{ github.workspace }}/consumer/kde/.build/dependencies/prefix
       VIVID_BUILD_ARCH: ${{ matrix.arch }}
       VIVID_CONSUMER_PACKAGE_VERSION: ${{ needs.metadata.outputs.version }}
     steps:
       - name: Update Ubuntu package metadata
         run: apt-get update
-      - name: Install repository tools
-        run: >-
-          apt-get install -y --no-install-recommends
-          ca-certificates curl
-      - name: Configure KDE Neon Noble repository
-        shell: bash
-        run: |
-          key_path=/usr/share/keyrings/kde-neon.asc
-          curl --fail --location --output "${key_path}" https://archive.neon.kde.org/public.key
-          set -- $(sha256sum "${key_path}")
-          if [[ "$1" != "ee86878b3be00f5c99da50974ee7c5141a163d0e00fccb889398f1a33e112584" ]]; then
-            echo "Unexpected KDE Neon repository signing key checksum: $1" >&2
-            exit 1
-          fi
-          printf '%s\n' \
-            'deb [signed-by=/usr/share/keyrings/kde-neon.asc] https://archive.neon.kde.org/user noble main' \
-            > /etc/apt/sources.list.d/kde-neon.list
-      - name: Update KDE Neon package metadata
-        run: apt-get update
       - name: Install build dependencies
         run: >-
           apt-get install -y --no-install-recommends
-          git g++ cmake ninja-build pkg-config python3
-          qt6-base-dev qt6-declarative-dev libkf6screen-dev
+          ca-certificates git g++ cmake ninja-build pkg-config python3 python3-venv
+          libfontconfig1 libxkbcommon-x11-0 libxcb-cursor0 libegl1
+          libopengl-dev libx11-xcb-dev libxcb-render0-dev libxcb-shape0-dev
+          libxcb-xfixes0-dev libwayland-dev libxcb1-dev libxcb-randr0-dev
+          libxcb-dpms0-dev libxkbcommon-dev
           libglvnd-dev libgbm-dev libpulse-dev libvulkan-dev
       - uses: actions/checkout@v4
+      - name: Prepare Qt 6.8 SDK
+        shell: bash
+        run: |
+          sdk_dir="${GITHUB_WORKSPACE}/consumer/kde/.build/Qt"
+          python3 -m venv "${sdk_dir}/aqt"
+          cd "${sdk_dir}"
+          "${sdk_dir}/aqt/bin/pip" install --disable-pip-version-check aqtinstall==3.3.0
+          # The complete base SDK includes ICU, whose ABI can differ from the
+          # build distribution. Do not filter its archives to Qt modules alone.
+          "${sdk_dir}/aqt/bin/aqt" install-qt "${{ matrix.qt_host }}" desktop "${QT_VERSION}" \
+            "${{ matrix.qt_arch }}" --outputdir "${sdk_dir}"
+          # SDK architecture identifiers are not installation directory names.
+          # Resolve the installed tool and verify it before exporting its paths.
+          shopt -s nullglob
+          qmake_paths=("${sdk_dir}/${QT_VERSION}/"*/bin/qmake)
+          test "${#qmake_paths[@]}" -eq 1
+          qt_root="$(cd "$(dirname "${qmake_paths[0]}")/.." && pwd)"
+          installed_version="$(LD_LIBRARY_PATH="${qt_root}/lib" "${qt_root}/bin/qmake" -query QT_VERSION)"
+          printf 'Qt SDK: %s (Qt %s)\n' "${qt_root}" "${installed_version}"
+          test "${installed_version}" = "${QT_VERSION}"
+          printf 'QT_ROOT=%s\nCMAKE_PREFIX_PATH=%s:%s\nLD_LIBRARY_PATH=%s/lib:%s/lib\n' \
+            "${qt_root}" "${KDE_DEPS_PREFIX}" "${qt_root}" \
+            "${KDE_DEPS_PREFIX}" "${qt_root}" >> "${GITHUB_ENV}"
+          echo "${qt_root}/bin" >> "${GITHUB_PATH}"
+      - name: Build KScreen with the release SDK
+        shell: bash
+        run: |
+          # Build KScreen with the consumer's SDK so a rolling binary repository
+          # cannot silently raise the runtime Qt requirement. Keep all build
+          # dependencies local; the wallpaper uses the desktop's runtime libraries.
+          build_root="${GITHUB_WORKSPACE}/consumer/kde/.build/dependencies"
+          build_dependency() {
+            local name="$1" repository="$2" revision="$3"
+            local source_dir="${build_root}/${name}"
+            git init "${source_dir}"
+            git -C "${source_dir}" fetch --depth 1 "${repository}" "${revision}"
+            git -C "${source_dir}" checkout --detach FETCH_HEAD
+            test "$(git -C "${source_dir}" rev-parse HEAD)" = "${revision}"
+            cmake -S "${source_dir}" -B "${source_dir}/.build" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_QCH=OFF \
+              -DCMAKE_INSTALL_PREFIX="${KDE_DEPS_PREFIX}" -DCMAKE_INSTALL_LIBDIR=lib
+            cmake --build "${source_dir}/.build" --parallel 2
+            cmake --install "${source_dir}/.build"
+          }
+          # ECM 6.10.0, Plasma Wayland Protocols 1.16.0, and KScreen 6.3.6.
+          build_dependency ecm https://invent.kde.org/frameworks/extra-cmake-modules.git \
+            7dd28cc56c339c3f8fb356f7c53c0e8f61433d81
+          build_dependency protocols https://invent.kde.org/libraries/plasma-wayland-protocols.git \
+            3d8327f5c8727702c5b14730c32d70b30e2ae106
+          build_dependency libkscreen https://invent.kde.org/plasma/libkscreen.git \
+            21807e39fe6898a98a8e2e10eac0292fd09d5544
       - name: Build KDE consumer
         run: tools/vivid.sh kde zip
+      - name: Verify packaged library dependencies
+        run: >-
+          python3 tools/consumer_kde/verify_release.py
+          "consumer/kde/.build/dist/vivid-consumer-kde-${VIVID_CONSUMER_PACKAGE_VERSION}-${VIVID_BUILD_ARCH}.zip"
+          "${QT_VERSION}"
       - name: Upload KDE consumer
         uses: actions/upload-artifact@v4
         with:
