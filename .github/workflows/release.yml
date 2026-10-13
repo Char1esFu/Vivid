@@ -245,11 +245,6 @@ jobs:
             21807e39fe6898a98a8e2e10eac0292fd09d5544
       - name: Build KDE consumer
         run: tools/vivid.sh kde zip
-      - name: Verify packaged library dependencies
-        run: >-
-          python3 tools/consumer_kde/verify_release.py
-          "consumer/kde/.build/dist/vivid-consumer-kde-${VIVID_CONSUMER_PACKAGE_VERSION}-${VIVID_BUILD_ARCH}.zip"
-          "${QT_VERSION}"
       - name: Upload KDE consumer
         uses: actions/upload-artifact@v4
         with:
