@@ -2351,13 +2351,21 @@ ensure_pipeline(VividVideoProducer* self)
     }
 
     g_object_set(source, "location", self->video_path.c_str(), nullptr);
+    /*
+     * qtdemux feeds audio and video from one streaming thread. pulsesink keeps
+     * its stream corked (and the pipeline clock stopped) until it has buffered
+     * a full ring of audio, while the synced appsink blocks on that clock. A
+     * 3-buffer video queue plus decoder reorder depth fills before qtdemux can
+     * reach that much audio, deadlocking 4K60 H.264 files after one frame. Size
+     * the compressed video queue by time, matching the optional audio queue.
+     */
     g_object_set(video_queue,
                  "max-size-buffers",
-                 3,
+                 0,
                  "max-size-bytes",
                  0,
                  "max-size-time",
-                 0,
+                 static_cast<guint64>(1000000000),
                  nullptr);
     g_object_set(video_caps, "caps", sink_caps, nullptr);
     g_object_set(appsink,
@@ -2377,6 +2385,16 @@ ensure_pipeline(VividVideoProducer* self)
      * in preroll on an idle audio sink.
      */
     gst_caps_unref(sink_caps);
+
+    /*
+     * Pin the pipeline to the system clock instead of letting the optional
+     * pulsesink provide one. A corked or stalled audio stream must not freeze
+     * the wallpaper: the audio sink slaves to this clock, and the synced
+     * appsink keeps advancing even when audio output never starts.
+     */
+    GstClock* system_clock = gst_system_clock_obtain();
+    gst_pipeline_use_clock(GST_PIPELINE(pipeline), system_clock);
+    gst_object_unref(system_clock);
 
     gst_bin_add_many(GST_BIN(pipeline),
                      source,
