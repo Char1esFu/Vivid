@@ -80,6 +80,73 @@ Start the producer first, then run `vivid-layer-shell-consumer`. See the
 [layer-shell consumer guide](consumer/layer-shell/README.md) for compositor
 autostart configuration.
 
+### Updating
+
+Flatpak bundles and desktop consumers installed from release files are not
+updated by `flatpak update` or the system package manager. Download and
+install both parts again when a new release is published:
+
+```sh
+flatpak install --user --reinstall ./io.github.ayasa520.Vivid-<version>-<arch>.flatpak
+```
+
+Upgrade the KDE consumer with `kpackagetool6 --upgrade` as shown above, then
+restart plasmashell:
+
+```sh
+systemctl --user restart plasma-plasmashell.service
+```
+
+Keep the producer and consumer on the same version.
+
+## Troubleshooting
+
+`flatpak run io.github.ayasa520.Vivid` prints the producer log to the terminal.
+
+### Black wallpaper with repeated `WINDOW_STATE_INVALID` errors
+
+The consumer and producer versions do not match. An older consumer only
+negotiates protocol `version=1`, and a newer producer rejects its window state.
+Upgrade the consumer to the producer's version as described in
+[Updating](#updating).
+
+### No `role=consumer` connection in the log
+
+The desktop consumer is not running. In KDE Plasma, select **Vivid** as the
+wallpaper type in **Desktop and Wallpaper** settings, on every screen.
+
+### Black screen on hybrid graphics with `BIND_FAILED` and `EGL error 0x3003`
+
+The default rendering GPU, `auto`, prefers the discrete GPU, while the
+compositor usually runs on the integrated GPU, and importing a linear DMA-BUF
+across GPUs can fail. In the WebUI settings, set **Rendering GPU** to the GPU
+that drives the display, usually the integrated one such as
+`/dev/dri/renderD128`. A working setup logs `path=optimized-same-device`.
+
+### Video wallpapers with an audio track freeze on the first frame
+
+In release 1.0.12, the video renderer's GStreamer pipeline takes its
+clock from PulseAudio. While the audio stream has not started, video stays on
+the first frame and the log prints `playing pipeline has no appsink sample` and
+`starvation recovery` every few seconds. Videos without audio are not affected.
+The source now pins the pipeline to the system clock and bounds the video queue
+by time; use a build that includes this fix.
+
+### Models missing or covered in broken triangles in 3D scenes
+
+In release 1.0.12, the scene renderer has two problems reading legacy static
+models (MDLV0004 and MDLV0014):
+
+- MDLV0004 models that store a material path in front of each mesh chunk are
+  dropped entirely. The log prints
+  `static mdl has fewer prefixed material paths than chunks` and
+  `static mdl parse failed`, and only the background is shown.
+- Meshes with more than 65535 vertices store 32-bit indices but are read as
+  16-bit, which covers the model in misplaced triangles.
+
+Both are fixed in `producer/third_party/wallpaper-scene-renderer`; use a build
+that includes the fix.
+
 ## Build
 
 Producer build artifacts are written under `producer/.build`.
@@ -118,6 +185,38 @@ Useful cache locations:
 - `producer/.build/flatpak-builder-state/ccache`
 - `producer/.build/flatpak-native-cache/native-build`
 - `producer/.build/flatpak-repo/vivid-producer`
+
+The first build needs `org.gnome.Sdk//49`. Set
+`VIVID_FLATPAK_INSTALL_DEPS_FROM=flathub` to let `flatpak-builder` install a
+missing SDK.
+
+#### Building local changes
+
+The Flatpak source is pinned to the git commit selected by
+`VIVID_FLATPAK_GIT_URL` and `VIVID_FLATPAK_GIT_BRANCH`, which default to `main`
+on GitHub. Uncommitted changes and local-only commits are not built; the script
+only prints a notice. To test local changes, commit them to a branch and build
+from the local repository:
+
+```sh
+VIVID_FLATPAK_GIT_URL="file://${PWD}" \
+VIVID_FLATPAK_GIT_BRANCH=<branch> \
+  tools/vivid.sh build flatpak
+```
+
+Submodules are fetched from the URL in `.gitmodules` at the commit recorded by
+the parent repository, so submodule changes must also be committed and
+reachable from that URL.
+
+#### Running the build
+
+`tools/vivid.sh flatpak run-appdir` runs the build without installing the
+bundle or replacing an installed version. It keeps its own configuration under
+`producer/.build/flatpak-run/vivid-producer` instead of
+`~/.var/app/io.github.ayasa520.Vivid`, so settings such as the rendering GPU
+must be configured again (see the hybrid graphics entry in
+[Troubleshooting](#troubleshooting)). It uses the same socket as the installed
+version, so the two cannot run at the same time.
 
 ### Direct Run
 
